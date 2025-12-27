@@ -13,7 +13,6 @@ fun getClipBoard(context: Context): String? {
         clipboard.primaryClipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML) == false) {
         return null
     }
-
     val item = clipboard.primaryClip?.getItemAt(0)
     return item?.text?.toString() ?: item?.coerceToText(context)?.toString()
 }

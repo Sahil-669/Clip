@@ -3,6 +3,8 @@ package com.example.clip.di
 import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.example.clip.data.AppDatabase
+import com.example.clip.data.ClipboardSource
+import com.example.clip.data.IosClipboardSource
 import kotlinx.cinterop.ExperimentalForeignApi
 import org.koin.dsl.module
 import platform.Foundation.NSDocumentDirectory
@@ -27,4 +29,5 @@ actual val platformModule = module {
             .setDriver(BundledSQLiteDriver())
             .build()
     }
+    single<ClipboardSource> { IosClipboardSource() }
 }
