@@ -72,7 +72,7 @@ fun App() {
             FloatingActionButton(
                 onClick = {viewModel.checkClipboard()}
                 ) {
-                Icon(Icons.Default.Refresh, contentDescription = "refresh")
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
             }
         }
     ) { paddingValues ->
