@@ -2,6 +2,7 @@ package com.example.clip.presentation
 
 import com.example.clip.data.Clip
 import com.example.clip.data.ClipDao
+import com.example.clip.data.ClipType
 import com.example.clip.data.ClipboardSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,13 @@ class ClipViewModel (
         .stateIn(scope, SharingStarted.Lazily, emptyList())
 
     fun checkClipboard() {
+
+        val imagePath = clipboard.getClipBoardImage()
+        if (imagePath != null) {
+            saveClip(imagePath)
+            return
+        }
+
         val realText = clipboard.getClipBoardText()
 
         if (realText != null) {
@@ -37,6 +45,17 @@ class ClipViewModel (
         }
     }
 
+    private fun saveClip(content: String, type: ClipType = ClipType.IMAGE) {
+        scope.launch {
+            val clip = Clip(
+                id = content.hashCode().toString(),
+                content = content,
+                timestamp = Clock.System.now().toEpochMilliseconds(),
+                type = type
+            )
+            dao.insert(clip)
+        }
+    }
     fun deleteClip(clip: Clip) {
         scope.launch {
             dao.delete(clip)
