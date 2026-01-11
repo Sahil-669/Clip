@@ -1,5 +1,7 @@
 package com.example.clip
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +37,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -44,12 +47,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -66,58 +71,112 @@ fun App() {
     val viewModel = koinInject<ClipViewModel>()
 
     val clips by viewModel.clips.collectAsState()
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val colorScheme = if (isSystemDark)
+        androidx.compose.material3.darkColorScheme()
+        else
+        androidx.compose.material3.lightColorScheme()
 
+    MaterialTheme(colorScheme = colorScheme) {
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {viewModel.checkClipboard()}
+        containerColor = MaterialTheme.colorScheme.background,
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = { viewModel.checkClipboard() }
                 ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                }
             }
-        }
-    ) { paddingValues ->
-        if (clips.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No Clips")
-            }
-        } else {
-            LazyColumn (
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(
-                    items = clips,
-                    key = {it.id}
-                ) { clip ->
-                    val dismissState = rememberSwipeToDismissBoxState()
-                    LaunchedEffect(dismissState.currentValue) {
-                        if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
-                            viewModel.deleteClip(clip)
+        ) { paddingValues ->
+            if (clips.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No Clips!", color = MaterialTheme.colorScheme.onBackground)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(
+                        items = clips,
+                        key = { it.id }
+                    ) { clip ->
+                        var isDismissed by remember { mutableStateOf(false) }
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            positionalThreshold = { totalDistance -> totalDistance * 1f }
+                        )
+                        LaunchedEffect(dismissState) {
+                            snapshotFlow { dismissState.progress to dismissState.currentValue }
+                                .collect { (progress, value) ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart && progress >= 0.98f) {
+                                        isDismissed = true
+                                    }
+                                }
                         }
-                    }
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        enableDismissFromStartToEnd = false,
-                        enableDismissFromEndToStart = true,
-                        backgroundContent = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Red, RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 20.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = "delete", tint = Color.White)
+                        LaunchedEffect(isDismissed) {
+                            if (isDismissed) {
+                                kotlinx.coroutines.delay(400)
+                                viewModel.deleteClip(clip)
                             }
-                        },
-                        content = {
-                            ClipItem(
-                                clip = clip,
-                                onDelete = { viewModel.deleteClip(clip) }
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = !isDismissed,
+                            exit = androidx.compose.animation.shrinkHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(500)
+                            ) + androidx.compose.animation.fadeOut()
+                        ) {
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                modifier = Modifier.animateItem(),
+                                enableDismissFromStartToEnd = false,
+                                enableDismissFromEndToStart = true,
+                                backgroundContent = {
+                                    val backgroundColor by animateColorAsState(
+                                        targetValue = when (dismissState.targetValue) {
+                                            SwipeToDismissBoxValue.EndToStart -> Color.Red
+                                            else -> Color(0xFFFF1744)
+                                        },
+                                        label = "BgColor"
+                                    )
+                                    val iconScale by animateFloatAsState(
+                                        targetValue = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) 1.2f else 0.8f,
+                                        label = "IconAnim"
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(backgroundColor, RoundedCornerShape(12.dp))
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        val currentOffset = try {
+                                            dismissState.requireOffset()
+                                        } catch (_: Exception) {0f}
+                                        val iconOffset = if (currentOffset < 0) {
+                                            (currentOffset / 2).toInt()
+                                        } else 0
+                                        if (dismissState.progress > 0.15f) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "delete",
+                                                tint = Color.White,
+                                                modifier = Modifier
+                                                    .offset { IntOffset(x = iconOffset, y = 0) }
+                                                    .scale(iconScale)
+                                            )
+                                        }
+                                    }
+                                },
+                                content = {
+                                    ClipItem(
+                                        clip = clip,
+                                        onDelete = { viewModel.deleteClip(clip) }
+                                    )
+                                }
                             )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -252,7 +311,7 @@ fun TextContent(text: String, isLink: Boolean) {
     Box(modifier = Modifier.padding(16.dp)) {
         Text(
             text = text,
-            color = if (isLink) Color(0xFF60A5FA) else Color(0xFFFFFFFF),
+            color = if (isLink) Color(0xFF60A5FA) else Color.White,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             modifier = Modifier
